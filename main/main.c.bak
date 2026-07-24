@@ -1,0 +1,1011 @@
+#include "mre_http_get.h"
+
+#define CHUNK_SIZE 200
+
+VMUINT8* screenbuf = NULL;
+VMINT nscreen_width = -1;
+VMINT nscreen_height = -1;
+VMINT filledDsplByLines = 0;
+VMINT drv;
+VMBOOL second = VM_FALSE;
+VMBOOL third = VM_FALSE;
+VMBOOL flightMode = VM_FALSE;
+VMWCHAR title_name[22] = {0};
+VMCHAR new_data[1201] = {0};
+static VMUINT file_size = 0;
+static VMCHAR file_name[128] = {0};
+static VMFILE file_hdl = -1;
+static VMINT http_hdl[12] = {-1};
+VMCHAR download_fname[128];
+VMCHAR n_without_ext[128];
+VMCHAR extension_name[5];
+
+static br_ssl_client_context sc;
+static br_x509_minimal_context xc;
+static br_sslio_context ioc;
+
+static unsigned char iobuf[BR_SSL_BUFSIZE_BIDI];
+
+static VMINT https_socket = -1;
+
+extern int sock_read(void *ctx, unsigned char *buf, size_t len);
+extern int sock_write(void *ctx, const unsigned char *buf, size_t len);
+
+void vm_main(void) {
+
+    vm_reg_sysevt_callback(handle_sysevt);
+    vm_reg_keyboard_callback(handle_keyevt);
+    vm_font_set_font_size(VM_SMALL_FONT);
+    nscreen_width = vm_graphic_get_screen_width();
+    nscreen_height = vm_graphic_get_screen_height();
+    vm_ascii_to_ucs2(title_name, (strlen("Input URL:") + 1) * 2, "Input URL:");
+    vm_input_set_editor_title(title_name);
+    if (vm_sim_card_count() == 99) { flightMode = VM_TRUE; }
+    drv = vm_get_removable_driver();
+    if (drv < 0) { drv = vm_get_system_driver(); }
+    if (flightMode == VM_FALSE) { vm_input_text3(NULL, 1200, 8, save_text); }
+
+}
+
+void handle_sysevt(VMINT message, VMINT param) {
+
+    switch (message) {
+    case VM_MSG_CREATE:
+    case VM_MSG_ACTIVE:
+        layer_hdl[0] = vm_graphic_create_layer(0, 0, vm_graphic_get_screen_width(), vm_graphic_get_screen_height(), -1);
+        vm_graphic_set_clip(0, 0, vm_graphic_get_screen_width(), vm_graphic_get_screen_height());
+        break;
+
+    case VM_MSG_PAINT:
+        vm_switch_power_saving_mode(turn_off_mode);
+        screenbuf = vm_graphic_get_layer_buffer(layer_hdl[0]);
+        if (flightMode == VM_TRUE) {
+            fill_white();
+            display_text_line(screenbuf, "Please turn Flight mode off !", 0, filledDsplByLines, nscreen_width, nscreen_height, 2, 1, VM_COLOR_BLACK, VM_FALSE);
+        }
+        break;
+
+    case VM_MSG_INACTIVE:
+        vm_switch_power_saving_mode(turn_on_mode);
+        if (layer_hdl[0] != -1)
+            vm_graphic_delete_layer(layer_hdl[0]);
+        break;
+
+    case VM_MSG_QUIT:
+        if (layer_hdl[0] != -1)
+            vm_graphic_delete_layer(layer_hdl[0]);
+        break;
+    }
+}
+
+void handle_keyevt(VMINT event, VMINT keycode) {
+
+    if (event == VM_KEY_EVENT_UP && keycode == VM_KEY_RIGHT_SOFTKEY) {
+        if (layer_hdl[0] != -1) {
+            vm_graphic_delete_layer(layer_hdl[0]);
+            layer_hdl[0] = -1;
+        }
+        vm_exit_app();
+    }
+
+    if (event == VM_KEY_EVENT_UP && keycode == VM_KEY_LEFT_SOFTKEY) {
+        break_download(get_con_handl());
+    }
+
+}
+
+void save_text(VMINT state, VMWSTR text) {
+
+    VMINT lenght = wstrlen(text);
+
+    if (state == VM_INPUT_OK && lenght > 0) {
+        fill_white();
+        vm_ucs2_to_ascii(new_data, lenght + 1, text);
+        display_text_line(screenbuf, new_data, 0, filledDsplByLines, nscreen_width, nscreen_height, 2, 1, VM_COLOR_BLACK, VM_FALSE);
+        let_download();
+    } else {
+        vm_exit_app();
+    }
+
+}
+
+static void fill_white(void) {
+
+    vm_graphic_color color;
+    color.vm_color_565 = VM_COLOR_WHITE;
+    vm_graphic_setcolor(&color);
+    vm_graphic_fill_rect_ex(layer_hdl[0], 0, 0, vm_graphic_get_screen_width(), vm_graphic_get_screen_height());
+    vm_graphic_flush_layer(layer_hdl, 1);
+    filledDsplByLines = 0;
+
+}
+
+VMINT string_width(VMWCHAR *whead, VMWCHAR *wtail) {
+
+    VMWCHAR *wtemp = NULL;
+    VMINT width = 0;
+    if (whead == NULL || wtail == NULL)
+        return 0;
+    wtemp = (VMWCHAR *)vm_malloc((wtail - whead) * 2 + 2);
+    if (wtemp == NULL)
+        return 0;
+    memset(wtemp, 0, (wtail - whead) * 2 + 2);
+    memcpy(wtemp, whead, (wtail - whead) * 2);
+    width = vm_graphic_get_string_width(wtemp);
+    vm_free(wtemp);
+    return width;
+
+}
+
+void display_text_line(VMUINT8 *disp_buf, VMSTR str, VMINT x, VMINT y, VMINT width, VMINT height, VMINT betlines, VMINT startLine, VMINT color, VMBOOL fix_pos) {
+
+    VMWCHAR *ucstr;
+    VMWCHAR *ucshead;
+    VMWCHAR *ucstail;
+    VMINT is_end = FALSE;
+    VMINT nheight = y;
+    VMINT nlines = 0;
+
+    if (y == 0) { fill_white(); }
+
+    if (str == NULL || disp_buf == NULL || betlines < 0) { return; }
+
+    VMINT nline_height = vm_graphic_get_character_height() + betlines;
+
+    if (third == VM_TRUE && fix_pos == VM_FALSE) {
+        nheight = nheight + nline_height;
+        third = VM_FALSE;
+    }
+
+    if (fix_pos == VM_TRUE) {
+        vm_graphic_fill_rect(screenbuf, 0, filledDsplByLines, nscreen_width, nline_height, VM_COLOR_WHITE, VM_COLOR_WHITE);
+        third = VM_TRUE;
+    }
+
+    ucstr = (VMWCHAR*)vm_malloc(2 * (strlen(str) + 1));
+    if (ucstr == NULL) { return; }
+
+    if (0 != vm_ascii_to_ucs2(ucstr, 2 * (strlen(str) + 1), str)) {
+        vm_free(ucstr);
+        return;
+    }
+
+    ucshead = ucstr;
+    ucstail = ucshead + 1;
+
+    while (is_end == FALSE) {
+        if (nheight > y + height) {
+            fill_white();
+            nheight = 0;
+        }
+
+        while (1) {
+            if (string_width(ucshead, ucstail) <= width) {
+                ucstail++;
+            } else {
+                nlines++;
+                ucstail--;
+                break;
+            }
+            if (0 == vm_wstrlen(ucstail)) {
+                is_end = TRUE;
+                nlines++;
+                break;
+            }
+        }
+
+        if (nlines >= startLine) {
+            vm_graphic_textout(disp_buf, x, nheight, ucshead, (ucstail - ucshead), (VMUINT16)(color));
+            vm_graphic_flush_layer(layer_hdl, 1);
+            if (fix_pos == VM_FALSE) { nheight += nline_height; }
+            filledDsplByLines = nheight;
+        }
+
+        ucshead = ucstail;
+        ucstail++;
+    }
+
+    vm_free(ucstr);
+}
+
+void extract_end_text(char *result_data, const char *inp_data, char separator) {
+
+    int i = 0;
+    int last_sep_pos = -1;
+
+    while (inp_data[i] != '\0') {
+        if (inp_data[i] == separator) {
+            last_sep_pos = i;
+        }
+        i++;
+    }
+
+    i = 0;
+    int j = last_sep_pos + 1;
+    while (inp_data[j] != '\0') {
+        result_data[i++] = inp_data[j++];
+    }
+    result_data[i] = '\0';
+
+}
+
+//void let_download(void) {
+
+//    download_process(new_data, HTTP_USE_CMNET_PRIORITY, GET, &http_hdl[0], download_callback, notify_callback);
+
+//}
+
+void break_download(VMINT handle) {
+
+    VMCHAR text[255] = {0};
+    if (!vm_cancel_asyn_http_req(handle)) {
+        handle = -1;
+        sprintf(text, "Interrupt HTTP download");
+        display_text_line(screenbuf, text, 0, filledDsplByLines, nscreen_width, nscreen_height, 2, 1, VM_COLOR_BLACK, VM_FALSE);
+    }
+
+}
+
+static VMINT download_process(const VMCHAR* url,
+                               VM_HTTP_PROXY_TYPE apn, HTTP_METHOD mth,
+                               VMINT* handle,
+                               void (*download_callback)(VMINT bResponse, void* pSession),
+                               void (*notify_callback)(VMINT state, VMINT param, void* session)) {
+
+    asyn_http_req_t req;
+    VMINT ret;
+    http_head_t head[2];
+    VMCHAR full_name[128];
+    VMINT find_hdl;
+    VMUINT start_size = 0;
+    struct vm_fileinfo_t info;
+    VMCHAR text[255] = {0};
+    VMWCHAR w_full_name[258];
+
+    extract_end_text(download_fname, url, '/');
+
+    /* Bug 3 fix: no path segment → default to index.html like wget */
+    if (strlen(download_fname) == 0 || strlen(url) == strlen(download_fname)) {
+        strncpy(download_fname, "index.html", sizeof(download_fname) - 1);
+        download_fname[sizeof(download_fname) - 1] = '\0';
+    }
+
+    extract_end_text(extension_name, download_fname, '.');
+    if (strlen(extension_name) == 0 || strcmp(extension_name, download_fname) == 0) {
+        strncpy(extension_name, "gz", sizeof(extension_name) - 1);
+        extension_name[sizeof(extension_name) - 1] = '\0';
+        strncat(download_fname, ".gz", sizeof(download_fname) - strlen(download_fname) - 1);
+    }
+
+    if (second == VM_FALSE) {
+        display_text_line(screenbuf, "Connecting...", 0, filledDsplByLines, nscreen_width, nscreen_height, 2, 1, VM_COLOR_BLACK, VM_FALSE);
+        second = VM_TRUE;
+    }
+
+    strncpy(n_without_ext, download_fname, strlen(download_fname) - strlen(extension_name));
+    n_without_ext[strlen(download_fname) - strlen(extension_name)] = '\0';
+
+    sprintf(full_name, "%c:\\%s*", drv, n_without_ext);
+    vm_ascii_to_ucs2(w_full_name, (strlen(full_name) + 1) * 2, full_name);
+
+    if ((find_hdl = vm_find_first(w_full_name, &info)) >= 0) {
+        vm_ucs2_to_gb2312(file_name, 128, info.filename);
+        if (!vm_ends_with(file_name, extension_name)) {
+            sprintf(text, "The file has been downloaded");
+            display_text_line(screenbuf, text, 0, filledDsplByLines, nscreen_width, nscreen_height, 2, 1, VM_COLOR_BLACK, VM_FALSE);
+            return -1;
+        } else if (!vm_ends_with(file_name, "tmp")) {
+            sprintf(full_name, "%c:\\%s", drv, file_name);
+            vm_ascii_to_ucs2(w_full_name, (strlen(full_name) + 1) * 2, full_name);
+            read_data(w_full_name, 0, 4, &file_size);
+            read_data(w_full_name, 4, 4, &start_size);
+        }
+        vm_find_close(find_hdl);
+    }
+
+    req.req_method = mth;
+    req.use_proxy = apn;
+
+    req.http_request = (http_request_t*)vm_calloc(sizeof(http_request_t));
+    if (NULL == req.http_request) {
+        return -1;
+    }
+
+    if (strncmp(url, "http://", strlen("http://"))) {
+        strcat(req.http_request->url, "http://");
+    }
+    strcat(req.http_request->url, url);
+
+    /* Header 0: Range */
+    if (0 == file_size) {
+        sprintf(head[0].name, "RANGE");
+        sprintf(head[0].value, "bytes=-1");
+    } else {
+        sprintf(head[0].name, "RANGE");
+        sprintf(head[0].value, "bytes=%d-%d", start_size,
+                ((start_size + CHUNK_SIZE - 1) > file_size
+                 ? file_size
+                 : (start_size + CHUNK_SIZE - 1)));
+    }
+
+    /* Header 1: Accept-Encoding */
+    sprintf(head[1].name, "Accept-Encoding");
+    sprintf(head[1].value, "gzip");
+
+    req.http_request->nhead = 2;
+    req.http_request->heads = head;
+
+    ret = vm_asyn_http_req(&req, download_callback, notify_callback);
+
+    if (ASYN_HTTP_REQ_ACCEPT_SUCCESS == ret) {
+        ret = vm_get_asyn_http_req_handle(&req, handle);
+    }
+
+    vm_free(req.http_request);
+    return ret;
+}
+
+static void download_callback(VMINT bResponse, void* pSession) {
+
+    VMCHAR head[255] = {0};
+    VMCHAR text[255] = {0};
+    VMUINT written;
+    VMUINT start_size = 0;
+    VMWCHAR w_file_name[258] = {0};
+    VMWCHAR w_file_name1[258] = {0};
+
+    if (0 == bResponse) {
+        http_session_t* session = (http_session_t*)pSession;
+
+        /* Server error */
+        if (0 > session->res_code || 500 == session->res_code) {
+            strcpy(text, "Server Error");
+            display_text_line(screenbuf, text, 0, filledDsplByLines, nscreen_width, nscreen_height, 2, 1, VM_COLOR_BLACK, VM_FALSE);
+            return;
+        }
+
+        /* Redirect — follow Location header */
+        if (301 == session->res_code || 302 == session->res_code) {
+            if (0 == get_http_head(session, "Location", head)) {
+                strncpy(new_data, head, sizeof(new_data) - 1);
+                new_data[sizeof(new_data) - 1] = '\0';
+                file_size = 0;
+                second = VM_FALSE;
+                memset(download_fname, 0, sizeof(download_fname));
+                memset(n_without_ext, 0, sizeof(n_without_ext));
+                memset(extension_name, 0, sizeof(extension_name));
+                display_text_line(screenbuf, "Redirecting...", 0, filledDsplByLines, nscreen_width, nscreen_height, 2, 1, VM_COLOR_BLACK, VM_FALSE);
+                let_download();
+            } else {
+                display_text_line(screenbuf, "Redirect failed: no Location", 0, filledDsplByLines, nscreen_width, nscreen_height, 2, 1, VM_COLOR_BLACK, VM_FALSE);
+            }
+            return;
+        }
+
+        /* WAP proxy reconnect */
+        if (get_http_head(session, "Content-Type", head)) {
+            strcpy(text, "Failed to obtain Content-Type");
+            display_text_line(screenbuf, text, 0, filledDsplByLines, nscreen_width, nscreen_height, 2, 1, VM_COLOR_BLACK, VM_FALSE);
+            return;
+        }
+        if (!strncmp(head, "text/vnd.wap.wml", strlen("text/vnd.wap.wml"))) {
+            strcpy(text, "CMWAP Reconnect");
+            display_text_line(screenbuf, text, 0, filledDsplByLines, nscreen_width, nscreen_height, 2, 1, VM_COLOR_BLACK, VM_FALSE);
+            let_download();
+            return;
+        }
+
+        sprintf(file_name, "%c:\\%stmp", drv, n_without_ext);
+        vm_ascii_to_ucs2(w_file_name, (strlen(file_name) + 1) * 2, file_name);
+
+        /* First request — get file size */
+        if (0 == file_size) {
+            file_hdl = vm_file_open(w_file_name, MODE_CREATE_ALWAYS_WRITE, TRUE);
+            if (file_hdl >= 0) {
+                if (get_http_head(session, "Content-Range", head)) {
+                    /* No Content-Range — fall back to Content-Length */
+                    if (get_http_head(session, "Content-Length", head)) {
+                        vm_file_close(file_hdl);
+                        vm_file_delete(w_file_name);
+                        strcpy(text, "Failed to get file, check URL !");
+                        display_text_line(screenbuf, text, 0, filledDsplByLines, nscreen_width, nscreen_height, 2, 1, VM_COLOR_BLACK, VM_FALSE);
+                        return;
+                    }
+                    file_size = (VMUINT)strtoi(head);
+                } else {
+                    char* slash_ptr = strstr(head, "/");
+                    if (slash_ptr && isdigit(*(slash_ptr + 1))) {
+                        file_size = strtoi(slash_ptr + 1);
+                    } else {
+                        strcpy(text, "Invalid Content-Range");
+                        display_text_line(screenbuf, text, 0, filledDsplByLines, nscreen_width, nscreen_height, 2, 1, VM_COLOR_BLACK, VM_FALSE);
+                        return;
+                    }
+                }
+
+                vm_file_write(file_hdl, &file_size, 4, &written);
+                vm_file_write(file_hdl, &start_size, 4, &written);
+                vm_file_close(file_hdl);
+            }
+        } else {
+            /* Subsequent chunks */
+            read_data(w_file_name, 4, 4, &start_size);
+
+            /* Bug 2 fix: clamp bytes so start_size never exceeds file_size */
+            VMUINT bytes_to_write = session->nresbody;
+            if (start_size + bytes_to_write > file_size) {
+                bytes_to_write = file_size - start_size;
+            }
+            start_size += bytes_to_write;
+
+            int progress = (int)(((float)start_size / file_size) * 100);
+            memset(text, 0, sizeof(text));
+            sprintf(text, "Download progress: %d%%", progress);
+            display_text_line(screenbuf, text, 0, filledDsplByLines, nscreen_width, nscreen_height, 2, 1, VM_COLOR_BLACK, VM_TRUE);
+
+            file_hdl = vm_file_open(w_file_name, MODE_WRITE, TRUE);
+            vm_file_seek(file_hdl, 4, BASE_BEGIN);
+            vm_file_write(file_hdl, &start_size, 4, &written);
+            vm_file_seek(file_hdl, 0, BASE_END);
+            vm_file_write(file_hdl, session->resbody, bytes_to_write, &written);
+            vm_file_close(file_hdl);
+
+            /* Download complete */
+            if (start_size >= file_size) {
+                VMCHAR* data = vm_malloc(file_size);
+                read_data(w_file_name, 8, file_size, data);
+                vm_file_delete(w_file_name);
+                sprintf(file_name, "%c:\\%s", drv, download_fname);
+                vm_ascii_to_ucs2(w_file_name1, (strlen(file_name) + 1) * 2, file_name);
+                file_hdl = vm_file_open(w_file_name1, MODE_CREATE_ALWAYS_WRITE, TRUE);
+                vm_file_write(file_hdl, data, file_size, &written);
+                vm_file_close(file_hdl);
+                vm_free(data);
+                http_hdl[0] = -1;
+                sprintf(text, "Download successful, a total of %d bytes downloaded", file_size);
+                display_text_line(screenbuf, text, 0, filledDsplByLines, nscreen_width, nscreen_height, 2, 1, VM_COLOR_BLACK, VM_FALSE);
+                return;  /* done — do NOT call let_download() */
+            }
+        }
+    }
+
+    let_download();
+}
+
+static void notify_callback(VMINT state, VMINT param, void* session) {
+
+    VMCHAR text[255] = {0};
+
+    switch (state) {
+        case HTTP_STATE_GET_HOSTNAME:
+        case HTTP_STATE_CONNECTING:
+        case HTTP_STATE_SENDING:
+        case HTTP_STATE_RECV_STATUS:
+        case HTTP_STATE_RECV_HEADS:
+        case HTTP_STATE_RECV_BODY:
+            break;
+        default:
+            strcpy(text, "Unknown Event");
+            display_text_line(screenbuf, text, 0, filledDsplByLines, nscreen_width, nscreen_height, 2, 1, VM_COLOR_BLACK, VM_FALSE);
+            break;
+    }
+
+}
+
+VMINT read_data(VMWSTR file_name, VMINT offset, VMINT num, void* data) {
+
+    VMFILE file_hdl;
+    VMUINT nread;
+    file_hdl = vm_file_open(file_name, MODE_READ, TRUE);
+    if (file_hdl >= 0) {
+        vm_file_seek(file_hdl, offset, BASE_BEGIN);
+        vm_file_read(file_hdl, data, num, &nread);
+        vm_file_close(file_hdl);
+        return 0;
+    }
+    return -1;
+
+}
+
+VMINT get_con_handl(void) {
+
+    return http_hdl[0];
+
+}
+
+void let_download(void)
+{
+    if (!strncmp(new_data, "https://", 8))
+    {
+        https_download(new_data);
+    }
+    else
+    {
+        download_process(
+            new_data,
+            HTTP_USE_CMNET_PRIORITY,
+            GET,
+            &http_hdl[0],
+            download_callback,
+            notify_callback);
+    }
+}
+
+VMINT https_parse_url(const VMCHAR *url, https_url_t *out)
+{
+    const char *p;
+    const char *slash;
+
+    if (!url || !out)
+        return -1;
+
+    memset(out, 0, sizeof(https_url_t));
+
+    if (strncmp(url, "https://", 8))
+        return -1;
+
+    p = url + 8;
+
+    slash = strchr(p, '/');
+
+    if (slash)
+    {
+        memcpy(out->host, p, slash - p);
+        out->host[slash - p] = 0;
+
+        strncpy(out->path,
+                slash,
+                sizeof(out->path) - 1);
+    }
+    else
+    {
+        strcpy(out->host, p);
+        strcpy(out->path, "/");
+    }
+
+    out->port = 443;
+
+    return 0;
+}
+
+//VMINT https_connect(https_url_t *url)
+//{
+//    VMINT sock;
+
+//    br_ssl_client_init_full(&sc, &xc, TAs, TAs_NUM);
+
+//    br_ssl_engine_set_buffer(&sc.eng, iobuf, sizeof(iobuf), 1);
+
+//    br_ssl_client_reset(&sc, url->host, 0);
+
+//    br_sslio_init(&ioc, &sc.eng, sock_read, NULL, sock_write, NULL);
+
+//    br_sslio_flush(&ioc);
+
+//    unsigned char c;
+
+//    br_sslio_read(&ioc, &c, 1);
+
+//    sock = vm_soc_create(VM_SOC_SOCK_STREAM, VM_SOC_PROTO_TCP);
+
+//    if (sock < 0)
+//        return -1;
+
+    /*
+        TODO:
+
+        1. Resolve host:
+           vm_soc_get_host_by_name()
+
+        2. Fill sockaddr
+
+        3. vm_soc_connect()
+
+        4. Initialize BearSSL
+    */
+
+//    return sock;
+//}
+
+VMINT https_send_request(VMINT sock, https_url_t *url, VMUINT start, VMUINT end)
+{
+    char request[1024];
+
+    memset(request, 0, sizeof(request));
+
+    sprintf(request,
+            "GET %s HTTP/1.1\r\n"
+            "Host: %s\r\n"
+            "Range: bytes=%u-%u\r\n"
+            "Connection: close\r\n"
+            "Accept-Encoding: identity\r\n"
+            "\r\n",
+            url->path,
+            url->host,
+            start,
+            end);
+
+    /*
+       Replace with:
+
+       br_sslio_write_all(...)
+       br_sslio_flush(...)
+    */
+
+    vm_soc_send(sock,
+                request,
+                strlen(request),
+                0);
+
+    return 0;
+}
+
+VMINT https_receive_file(VMINT sock, const VMCHAR *name)
+{
+    VMFILE file;
+    VMUINT written;
+
+    char buffer[1024];
+    int len;
+
+    VMWCHAR wname[256];
+
+    vm_ascii_to_ucs2(wname,
+                     (strlen(name)+1)*2,
+                     name);
+
+    file = vm_file_open(
+                wname,
+                MODE_CREATE_ALWAYS_WRITE,
+                TRUE);
+
+    if (file < 0)
+        return -1;
+
+    while (1)
+    {
+        /*
+           Replace with:
+
+           len = br_sslio_read(...)
+        */
+
+        len = vm_soc_recv(
+                  sock,
+                  buffer,
+                  sizeof(buffer),
+                  0);
+
+        if (len <= 0)
+            break;
+
+        vm_file_write(
+            file,
+            buffer,
+            len,
+            &written);
+    }
+
+    vm_file_close(file);
+
+    return 0;
+}
+
+VMINT https_download(const VMCHAR *url)
+{
+    https_url_t info;
+
+    VMINT sock;
+
+    if (https_parse_url(url, &info))
+    {
+        display_text_line(
+            screenbuf,
+            "Invalid HTTPS URL",
+            0,
+            filledDsplByLines,
+            nscreen_width,
+            nscreen_height,
+            2,
+            1,
+            VM_COLOR_BLACK,
+            VM_FALSE);
+
+        return -1;
+    }
+
+    display_text_line(
+        screenbuf,
+        "Connecting HTTPS...",
+        0,
+        filledDsplByLines,
+        nscreen_width,
+        nscreen_height,
+        2,
+        1,
+        VM_COLOR_BLACK,
+        VM_FALSE);
+
+    sock = https_connect(&info);
+
+    if (sock < 0)
+    {
+        display_text_line(
+            screenbuf,
+            "HTTPS connect failed",
+            0,
+            filledDsplByLines,
+            nscreen_width,
+            nscreen_height,
+            2,
+            1,
+            VM_COLOR_BLACK,
+            VM_FALSE);
+
+        return -1;
+    }
+
+    https_send_request(
+        sock,
+        &info,
+        0,
+        0xFFFFFFFF);
+
+    https_receive_file(
+        sock,
+        "e:\\https_download.bin");
+
+    vm_soc_close(sock);
+
+    display_text_line(
+        screenbuf,
+        "HTTPS download complete",
+        0,
+        filledDsplByLines,
+        nscreen_width,
+        nscreen_height,
+        2,
+        1,
+        VM_COLOR_BLACK,
+        VM_FALSE);
+
+    return 0;
+}
+
+VMINT https_connect(https_url_t *url)
+{
+    vm_soc_address_t addr;
+    VMINT ret;
+
+    if (!url)
+        return -1;
+
+    memset(&addr, 0, sizeof(addr));
+
+    /*
+     * Create TCP socket
+     */
+    https_socket = vm_soc_create(
+        VM_SOC_SOCK_STREAM,
+        VM_SOC_PROTO_TCP);
+
+    if (https_socket < 0)
+    {
+        display_text_line(
+            screenbuf,
+            "Socket create failed",
+            0,
+            filledDsplByLines,
+            nscreen_width,
+            nscreen_height,
+            2,
+            1,
+            VM_COLOR_BLACK,
+            VM_FALSE);
+
+        return -1;
+    }
+
+    /*
+     * Resolve hostname
+     *
+     * Replace this with your SDK's
+     * DNS resolver function.
+     */
+
+    ret = vm_get_host_by_name(
+        url->host,
+        &addr.addr_len,
+        addr.addr);
+
+    if (ret < 0)
+    {
+        vm_soc_close(https_socket);
+        https_socket = -1;
+
+        display_text_line(
+            screenbuf,
+            "DNS failed",
+            0,
+            filledDsplByLines,
+            nscreen_width,
+            nscreen_height,
+            2,
+            1,
+            VM_COLOR_BLACK,
+            VM_FALSE);
+
+        return -1;
+    }
+
+    addr.port = url->port;
+
+    /*
+     * TCP connect
+     */
+
+    ret = vm_soc_connect(
+        https_socket,
+        &addr);
+
+    if (ret < 0)
+    {
+        vm_soc_close(https_socket);
+        https_socket = -1;
+
+        display_text_line(
+            screenbuf,
+            "TCP connect failed",
+            0,
+            filledDsplByLines,
+            nscreen_width,
+            nscreen_height,
+            2,
+            1,
+            VM_COLOR_BLACK,
+            VM_FALSE);
+
+        return -1;
+    }
+
+    /*
+     * BearSSL initialization
+     */
+
+    br_ssl_client_init_full(
+        &sc,
+        &xc,
+        TAs,
+        TAs_NUM);
+
+    br_ssl_engine_set_buffer(
+        &sc.eng,
+        ssl_iobuf,
+        sizeof(ssl_iobuf),
+        1);
+
+    /*
+     * Enable hostname verification + SNI
+     */
+
+    if (!br_ssl_client_reset(
+            &sc,
+            url->host,
+            0))
+    {
+        vm_soc_close(https_socket);
+        https_socket = -1;
+
+        display_text_line(
+            screenbuf,
+            "TLS reset failed",
+            0,
+            filledDsplByLines,
+            nscreen_width,
+            nscreen_height,
+            2,
+            1,
+            VM_COLOR_BLACK,
+            VM_FALSE);
+
+        return -1;
+    }
+
+    /*
+     * Bind SSL to socket
+     */
+
+    br_sslio_init(
+        &ioc,
+        &sc.eng,
+        sock_read,
+        NULL,
+        sock_write,
+        NULL);
+
+    /*
+     * Force handshake
+     */
+
+    {
+        unsigned char dummy = 0;
+
+        ret = br_sslio_write_all(
+            &ioc,
+            &dummy,
+            0);
+
+        if (ret != BR_ERR_OK)
+        {
+            vm_soc_close(https_socket);
+            https_socket = -1;
+
+            display_text_line(
+                screenbuf,
+                "TLS handshake failed",
+                0,
+                filledDsplByLines,
+                nscreen_width,
+                nscreen_height,
+                2,
+                1,
+                VM_COLOR_BLACK,
+                VM_FALSE);
+
+            return -1;
+        }
+
+        br_sslio_flush(&ioc);
+    }
+
+    display_text_line(
+        screenbuf,
+        "TLS connected",
+        0,
+        filledDsplByLines,
+        nscreen_width,
+        nscreen_height,
+        2,
+        1,
+        VM_COLOR_BLACK,
+        VM_FALSE);
+
+    return https_socket;
+}
+
+static int sock_read(void *ctx,
+                     unsigned char *buf,
+                     size_t len)
+{
+    int ret;
+
+    ret = vm_soc_recv(
+        https_socket,
+        (VMCHAR*)buf,
+        len,
+        0);
+
+    if (ret <= 0)
+        return -1;
+
+    return ret;
+}
+
+static int sock_write(void *ctx,
+                      const unsigned char *buf,
+                      size_t len)
+{
+    int ret;
+
+    ret = vm_soc_send(
+        https_socket,
+        (VMCHAR*)buf,
+        len,
+        0);
+
+    if (ret <= 0)
+        return -1;
+
+    return ret;
+}
+
