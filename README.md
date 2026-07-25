@@ -28,5 +28,4 @@ python pycert_bearssl.py convert \
     globalsign-root-ca.pem \
     Go_Daddy_Root_Certificate+Authority_-_G2.pem \
     gtsr1.pem \
-    SSL.com_TLS_ECC_Root_CA_2022.pem \
     > certificates.h
