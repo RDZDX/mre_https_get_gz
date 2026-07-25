@@ -1,10 +1,10 @@
 cmake_minimum_required (VERSION 3.10)
 
-project ("mre_http_get")
+project ("mre_https_get_gz")
 
-set(APP_NAME "mre_http_get")
+set(APP_NAME "mre_https_get_gz")
 set(DEVELOPER_NAME "RDZDX")
-set(RAM "3250") #Ram requirement (in kb)
+set(RAM "1500") #Ram requirement (in kb)
 set(IMSI "1234567890" CACHE STRING "Imsi of first SIM-card")
 set(API "SysStorage SysFile File ProMng HTTP TCP Sec UDP Sim_card BitStream") #Api for app, 
 set(APPID "0") #App id, special values: -1 is personal (imsi), 0 is in developing
