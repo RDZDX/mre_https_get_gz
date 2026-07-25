@@ -11,3 +11,30 @@ More information: https://vxpatch.luxferre.top
 ## File
 
 - [mre_https_get.vxp](https://rdzdx.github.io/mre_https_get.vxp/mre_https_get.vxp)
+
+| URL                                   | Content-Encoding | Final filename     |
+| ------------------------------------- | ---------------- | ------------------ |
+| `https://www.website.com/picture.jpg` | none             | `e:\picture.jpg`   |
+| `https://www.website.com/picture.jpg` | gzip             | `e:\picture.gz`    |
+| `https://www.website.com/file.bin`    | none             | `e:\file.bin`      |
+| `https://www.website.com/file.bin`    | gzip             | `e:\file.gz`       |
+| `https://www.website.com/`            | gzip             | `e:\download.gz`   |
+| `https://www.website.com/`            | none             | `e:\download.html` |
+
+Go_Daddy_Root_Certificate+Authority_-_G2.pem
+gtsr1.pem
+isrg-root-x1.pem
+digicert-global-root-g2.pem
+digicert-global-root-g3.pem
+globalsign-root-ca.pem
+SSL.com_TLS_ECC_Root_CA_2022.pem
+
+python pycert_bearssl.py convert \
+    isrg-root-x1.pem \
+    digicert-global-root-g2.pem \
+    digicert-global-root-g3.pem \
+    globalsign-root-ca.pem \
+    Go_Daddy_Root_Certificate+Authority_-_G2.pem \
+    gtsr1.pem \
+    SSL.com_TLS_ECC_Root_CA_2022.pem \
+    > certificates.h
