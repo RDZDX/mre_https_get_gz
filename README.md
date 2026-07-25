@@ -10,7 +10,7 @@ More information: https://vxpatch.luxferre.top
 
 ## File
 
-- [mre_https_get.vxp](https://rdzdx.github.io/mre_https_get.vxp/mre_https_get.vxp)
+- [mre_https_get_gz.vxp](https://rdzdx.github.io/mre_https_get_gz.vxp/mre_https_get_gz.vxp)
 
 | URL                                   | Content-Encoding | Final filename     |
 | ------------------------------------- | ---------------- | ------------------ |
