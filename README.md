@@ -15,9 +15,9 @@ More information: https://vxpatch.luxferre.top
 | URL                                   | Content-Encoding | Final filename     |
 | ------------------------------------- | ---------------- | ------------------ |
 | `https://www.website.com/picture.jpg` | none             | `e:\picture.jpg`   |
-| `https://www.website.com/picture.jpg` | gzip             | `e:\picture.gz`    |
+| `https://www.website.com/picture.jpg` | gzip             | `e:\picture_jpg.gz`|
 | `https://www.website.com/file.bin`    | none             | `e:\file.bin`      |
-| `https://www.website.com/file.bin`    | gzip             | `e:\file.gz`       |
+| `https://www.website.com/file.bin`    | gzip             | `e:\file_bin.gz`   |
 | `https://www.website.com/`            | gzip             | `e:\download.gz`   |
 | `https://www.website.com/`            | none             | `e:\download.html` |
 
