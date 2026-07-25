@@ -21,14 +21,6 @@ More information: https://vxpatch.luxferre.top
 | `https://www.website.com/`            | gzip             | `e:\download.gz`   |
 | `https://www.website.com/`            | none             | `e:\download.html` |
 
-Go_Daddy_Root_Certificate+Authority_-_G2.pem
-gtsr1.pem
-isrg-root-x1.pem
-digicert-global-root-g2.pem
-digicert-global-root-g3.pem
-globalsign-root-ca.pem
-SSL.com_TLS_ECC_Root_CA_2022.pem
-
 python pycert_bearssl.py convert \
     isrg-root-x1.pem \
     digicert-global-root-g2.pem \
