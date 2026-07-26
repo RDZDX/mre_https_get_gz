@@ -28,11 +28,11 @@ More information: https://vxpatch.luxferre.top
 5 Go_Daddy_Root_Certificate+Authority_-_G2 \
 6 Google Trust Services Root
 
-python pycert_bearssl.py convert \
-    isrg-root-x1.pem \
-    digicert-global-root-g2.pem \
-    digicert-global-root-g3.pem \
-    globalsign-root-ca.pem \
-    Go_Daddy_Root_Certificate+Authority_-_G2.pem \
-    gtsr1.pem \
+python pycert_bearssl.py convert 
+    isrg-root-x1.pem 
+    digicert-global-root-g2.pem 
+    digicert-global-root-g3.pem 
+    globalsign-root-ca.pem 
+    Go_Daddy_Root_Certificate+Authority_-_G2.pem 
+    gtsr1.pem 
     > certificates.h
