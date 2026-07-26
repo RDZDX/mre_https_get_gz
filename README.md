@@ -21,6 +21,8 @@ More information: https://vxpatch.luxferre.top
 | `https://www.website.com/`            | none             | `e:\download.html` |
 | `https://www.website.com/`            | gzip             | `e:\download.gz`   |
 
+User-Agent: Mozilla/5.0
+
 1 ISRG Root X1 \
 2 DigiCert Global Root G2 \
 3 DigiCert Global Root G3 \
