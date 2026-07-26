@@ -21,6 +21,13 @@ More information: https://vxpatch.luxferre.top
 | `https://www.website.com/`            | none             | `e:\download.html` |
 | `https://www.website.com/`            | gzip             | `e:\download.gz`   |
 
+ISRG Root X1
+DigiCert Global Root G2
+DigiCert Global Root G3
+GlobalSign Root CA
+Go_Daddy_Root_Certificate+Authority_-_G2
+Google Trust Services Root
+
 python pycert_bearssl.py convert \
     isrg-root-x1.pem \
     digicert-global-root-g2.pem \
