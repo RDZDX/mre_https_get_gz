@@ -12,14 +12,14 @@ More information: https://vxpatch.luxferre.top
 
 - [mre_https_get_gz.vxp](https://rdzdx.github.io/mre_https_get_gz/mre_https_get_gz.vxp)
 
-| URL                                   | Content-Encoding | Final filename     |
-| ------------------------------------- | ---------------- | ------------------ |
-| `https://www.website.com/picture.jpg` | none             | `e:\picture.jpg`   |
-| `https://www.website.com/picture.jpg` | gzip             | `e:\picture_jpg.gz`|
-| `https://www.website.com/file.bin`    | none             | `e:\file.bin`      |
-| `https://www.website.com/file.bin`    | gzip             | `e:\file_bin.gz`   |
-| `https://www.website.com/`            | none             | `e:\download.html` |
-| `https://www.website.com/`            | gzip             | `e:\download.gz`   |
+| URL                                   | Content-Encoding | Final filename       |
+| ------------------------------------- | ---------------- | -------------------- |
+| `https://www.website.com/picture.jpg` | none             | `e:\picture.jpg`     |
+| `https://www.website.com/picture.jpg` | gzip             | `e:\picture.jpg.gz`  |
+| `https://www.website.com/file.bin`    | none             | `e:\file.bin`        |
+| `https://www.website.com/file.bin`    | gzip             | `e:\file.bin.gz`     |
+| `https://www.website.com/`            | none             | `e:\download.html`   |
+| `https://www.website.com/`            | gzip             | `e:\download.html.gz`|
 
 User-Agent: Mozilla/5.0
 
