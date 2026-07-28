@@ -8,9 +8,10 @@ For use on Nokia mobile phones, the application must be signed using the IMSI co
 
 More information: https://vxpatch.luxferre.top
 
-## File
+## Files
 
 - [mre_https_get_gz.vxp](https://rdzdx.github.io/mre_https_get_gz/mre_https_get_gz.vxp)
+- [mre_https_get_gz_no_cert_check.vxp](https://rdzdx.github.io/mre_https_get_gz/mre_https_get_gz_no_cert_check.vxp)
 
 | URL                                   | Content-Encoding | Final filename       |
 | ------------------------------------- | ---------------- | -------------------- |
