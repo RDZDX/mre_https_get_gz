@@ -19,7 +19,7 @@
 #include <ctype.h>
 
 #include "bearssl.h"
-#include "certificates.h"
+//#include "certificates.h"
 //#include "thread.h"
 
 //VMINT layer_hdl[1];
