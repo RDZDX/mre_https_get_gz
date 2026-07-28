@@ -13,29 +13,4 @@ More information: https://vxpatch.luxferre.top
 - [mre_https_get_gz.vxp](https://rdzdx.github.io/mre_https_get_gz/mre_https_get_gz.vxp)
 - [mre_https_get_gz_no_cert_check.vxp](https://rdzdx.github.io/mre_https_get_gz/mre_https_get_gz_no_cert_check.vxp)
 
-| URL                                   | Content-Encoding | Final filename       |
-| ------------------------------------- | ---------------- | -------------------- |
-| `https://www.website.com/picture.jpg` | none             | `e:\picture.jpg`     |
-| `https://www.website.com/picture.jpg` | gzip             | `e:\picture.jpg.gz`  |
-| `https://www.website.com/file.bin`    | none             | `e:\file.bin`        |
-| `https://www.website.com/file.bin`    | gzip             | `e:\file.bin.gz`     |
-| `https://www.website.com/`            | none             | `e:\download.html`   |
-| `https://www.website.com/`            | gzip             | `e:\download.html.gz`|
-
 User-Agent: Mozilla/5.0
-
-1 ISRG Root X1 \
-2 DigiCert Global Root G2 \
-3 DigiCert Global Root G3 \
-4 GlobalSign Root CA \
-5 Go_Daddy_Root_Certificate+Authority_-_G2 \
-6 Google Trust Services Root
-
-python pycert_bearssl.py convert 
-    isrg-root-x1.pem 
-    digicert-global-root-g2.pem 
-    digicert-global-root-g3.pem 
-    globalsign-root-ca.pem 
-    Go_Daddy_Root_Certificate+Authority_-_G2.pem 
-    gtsr1.pem 
-    > certificates.h
