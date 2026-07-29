@@ -1,6 +1,6 @@
 #define inline  
 #include "bearssl.h"
-#include "certificates.h"
+//#include "certificates.h"
 #include "vmsys.h"
 #include "vmsock.h"
 #include "vmstdlib.h"
@@ -9,6 +9,9 @@
 
 #include <stdio.h>
 #define cprintf printf
+
+#define TAs NULL //remowe if use certificates !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+#define TAs_NUM 0 //remove if use certificates !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 bool connected = false;
 bool network_err = false;
