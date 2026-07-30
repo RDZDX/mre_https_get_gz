@@ -1,6 +1,7 @@
 ## mre_https_get.vxp
 
-https get demonstration on MRE platform mobile phones, including Nokia S30+ devices. if exist mre_https_get_gz_no_cert_check.txt on same directory as mre_https_get_gz_no_cert_check.vxp (same name as app name), then text from mre_https_get_gz_no_cert_check.txt copied as download url.
+https get demonstration on MRE platform mobile phones, including Nokia S30+ devices.\
+if exist mre_https_get_gz_no_cert_check.txt on same directory as mre_https_get_gz_no_cert_check.vxp (same name as app name), then text from mre_https_get_gz_no_cert_check.txt copied as download url.
 
 ## Nokia Phone Signing
 
