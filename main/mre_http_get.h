@@ -20,7 +20,7 @@
 
 #include "bearssl.h"
 //#include "certificates.h"
-//#include "thread.h"
+#include "thread.h"
 
 //VMINT layer_hdl[1];
 extern VMINT layer_hdl[1];
